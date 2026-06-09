@@ -1,0 +1,19 @@
+# Go binaries
+/bin/
+*.exe
+
+# Build artifacts
+dist/
+
+# Data and indexes
+data/
+
+# Environment
+.env
+
+# Eval results (sentinel committed, real results not)
+eval/results/*.json
+!eval/results/latest.json
+
+# macOS
+.DS_Store
