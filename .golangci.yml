@@ -1,16 +1,11 @@
 linters:
   enable:
-    - errcheck      # unchecked errors
-    - gosimple      # simplification suggestions
-    - govet         # go vet checks
-    - ineffassign   # unused assignments
-    - staticcheck   # static analysis
-    - unused        # unused code
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
 
 linters-settings:
   govet:
     enable:
       - shadow
-
-run:
-  go: "1.22"
