@@ -15,5 +15,8 @@ data/
 eval/results/*.json
 !eval/results/latest.json
 
+# Phase plan docs (generated locally, not committed)
+steps/
+
 # macOS
 .DS_Store
