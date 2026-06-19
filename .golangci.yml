@@ -1,11 +1,12 @@
+version: "2"
+
 linters:
   enable:
     - errcheck
     - govet
     - staticcheck
     - ineffassign
-
-linters-settings:
-  govet:
-    enable:
-      - shadow
+  settings:
+    govet:
+      enable:
+        - shadow
