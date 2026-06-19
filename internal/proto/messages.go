@@ -11,14 +11,16 @@ type ProduceRecord struct {
 }
 
 type ProduceResponse struct {
+	Partition  int
 	BaseOffset uint64
 	Err        string // non-empty if the broker rejected the batch
 }
 
 type FetchRequest struct {
-	Topic   string
-	Offset  uint64
-	MaxBytes uint32
+	Topic     string
+	Partition int32
+	Offset    uint64
+	MaxBytes  uint32
 }
 
 type FetchResponse struct {

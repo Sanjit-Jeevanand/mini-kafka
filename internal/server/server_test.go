@@ -6,23 +6,22 @@ import (
 	"net"
 	"testing"
 
-	ilog "github.com/sanjit-jeevanand/mini-kafka/internal/log"
 	"github.com/sanjit-jeevanand/mini-kafka/internal/proto"
+	"github.com/sanjit-jeevanand/mini-kafka/internal/topic"
 )
 
-// newTestServer starts a real TCP server on a random port backed by a real log.
+// newTestServer starts a real TCP server on a random port backed by a real topic.
 // It returns the server address and a cancel func that shuts everything down.
 func newTestServer(t *testing.T) (addr string, cancel context.CancelFunc) {
 	t.Helper()
 
-	dir := t.TempDir()
-	l, err := ilog.New(ilog.Options{Dir: dir})
+	tp, err := topic.Open("test", topic.Options{Dir: t.TempDir(), NumPartitions: 1})
 	if err != nil {
-		t.Fatalf("ilog.New: %v", err)
+		t.Fatalf("topic.Open: %v", err)
 	}
-	t.Cleanup(func() { l.Close() })
+	t.Cleanup(func() { tp.Close() })
 
-	h := NewHandler(l, "127.0.0.1:0")
+	h := NewHandler(tp, "127.0.0.1:0")
 	srv := NewServer("127.0.0.1:0", h, 64)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,9 +89,10 @@ func TestProduceAndFetch(t *testing.T) {
 	var fetched int
 	for fetched < n {
 		req := proto.FetchRequest{
-			Topic:    "test",
-			Offset:   nextOffset,
-			MaxBytes: 64 * 1024,
+			Topic:     "test",
+			Partition: 0,
+			Offset:    nextOffset,
+			MaxBytes:  64 * 1024,
 		}
 		if err := proto.WriteFrame(conn, proto.TypeFetchRequest, proto.EncodeFetchRequest(req)); err != nil {
 			t.Fatalf("WriteFrame fetch: %v", err)
@@ -230,7 +230,7 @@ func TestConcurrentProducers(t *testing.T) {
 	total := 0
 	var nextOffset uint64
 	for {
-		req := proto.FetchRequest{Topic: "test", Offset: nextOffset, MaxBytes: 128 * 1024}
+		req := proto.FetchRequest{Topic: "test", Partition: 0, Offset: nextOffset, MaxBytes: 128 * 1024}
 		if err := proto.WriteFrame(conn, proto.TypeFetchRequest, proto.EncodeFetchRequest(req)); err != nil {
 			break
 		}

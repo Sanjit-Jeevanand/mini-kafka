@@ -65,7 +65,7 @@ func main() {
 				log.Fatalf("invalid offset: %v", err)
 			}
 		}
-		cons := client.NewConsumer(c, topic, startOffset)
+		cons := client.NewConsumer(c, topic, 0, startOffset)
 		msgs, err := cons.Poll()
 		if err != nil {
 			log.Fatalf("fetch: %v", err)

@@ -9,15 +9,16 @@ import (
 
 	ilog "github.com/sanjit-jeevanand/mini-kafka/internal/log"
 	"github.com/sanjit-jeevanand/mini-kafka/internal/proto"
+	"github.com/sanjit-jeevanand/mini-kafka/internal/topic"
 )
 
 type Handler struct {
-	log  *ilog.Log
-	addr string
+	topic *topic.Topic
+	addr  string
 }
 
-func NewHandler(l *ilog.Log, addr string) *Handler {
-	return &Handler{log: l, addr: addr}
+func NewHandler(t *topic.Topic, addr string) *Handler {
+	return &Handler{topic: t, addr: addr}
 }
 
 func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
@@ -68,9 +69,17 @@ func (h *Handler) handleProduce(ctx context.Context, payload []byte) (uint16, []
 		)
 	}
 
+	// Use the first record's key to pick the partition for the whole batch.
+	// All records in one ProduceRequest land on the same partition.
+	var key []byte
+	if len(req.Records) > 0 {
+		key = req.Records[0].Key
+	}
+
 	var baseOffset uint64
+	var partition int
 	for i, rec := range req.Records {
-		offset, err := h.log.Append(ctx, ilog.Record{
+		p, offset, err := h.topic.Append(ctx, key, ilog.Record{
 			Key:   rec.Key,
 			Value: rec.Value,
 		})
@@ -81,11 +90,12 @@ func (h *Handler) handleProduce(ctx context.Context, payload []byte) (uint16, []
 		}
 		if i == 0 {
 			baseOffset = offset
+			partition = p
 		}
 	}
 
 	return proto.TypeProduceResponse, proto.EncodeProduceResponse(
-		proto.ProduceResponse{BaseOffset: baseOffset},
+		proto.ProduceResponse{Partition: partition, BaseOffset: baseOffset},
 	)
 }
 
@@ -105,7 +115,7 @@ func (h *Handler) handleFetch(ctx context.Context, payload []byte) (uint16, []by
 		if req.MaxBytes > 0 && bytesRead >= req.MaxBytes {
 			break
 		}
-		rec, err := h.log.Read(ctx, offset)
+		rec, err := h.topic.Read(ctx, int(req.Partition), offset)
 		if err != nil {
 			break // no more records at this offset
 		}
@@ -136,6 +146,6 @@ func (h *Handler) handleMeta(payload []byte) (uint16, []byte) {
 	return proto.TypeMetaResponse, proto.EncodeMetaResponse(proto.MetaResponse{
 		Topic:      req.Topic,
 		Addr:       h.addr,
-		Partitions: 1,
+		Partitions: h.topic.NumPartitions(),
 	})
 }

@@ -96,30 +96,34 @@ func DecodeProduceRequest(b []byte) (ProduceRequest, error) {
 	return r, nil
 }
 
-// Layout: [8 base_offset][2 err_len][err bytes]
+// Layout: [4 partition][8 base_offset][2 err_len][err bytes]
 func EncodeProduceResponse(r ProduceResponse) []byte {
-	buf := make([]byte, 8+2+len(r.Err))
-	binary.BigEndian.PutUint64(buf[0:8], r.BaseOffset)
-	putString(buf[8:], r.Err)
+	buf := make([]byte, 4+8+2+len(r.Err))
+	binary.BigEndian.PutUint32(buf[0:4], uint32(r.Partition))
+	binary.BigEndian.PutUint64(buf[4:12], r.BaseOffset)
+	putString(buf[12:], r.Err)
 	return buf
 }
 
 func DecodeProduceResponse(b []byte) (ProduceResponse, error) {
-	if len(b) < 10 {
+	if len(b) < 14 {
 		return ProduceResponse{}, fmt.Errorf("proto: truncated produce response")
 	}
 	var r ProduceResponse
-	r.BaseOffset = binary.BigEndian.Uint64(b[0:8])
-	s, _, err := getString(b[8:])
+	r.Partition = int(binary.BigEndian.Uint32(b[0:4]))
+	r.BaseOffset = binary.BigEndian.Uint64(b[4:12])
+	s, _, err := getString(b[12:])
 	r.Err = s
 	return r, err
 }
 
-// Layout: [2 topic_len][topic bytes][8 offset][4 max_bytes]
+// Layout: [2 topic_len][topic bytes][4 partition][8 offset][4 max_bytes]
 func EncodeFetchRequest(r FetchRequest) []byte {
-	buf := make([]byte, 2+len(r.Topic)+8+4)
+	buf := make([]byte, 2+len(r.Topic)+4+8+4)
 	off := 0
 	off += putString(buf[off:], r.Topic)
+	binary.BigEndian.PutUint32(buf[off:], uint32(r.Partition))
+	off += 4
 	binary.BigEndian.PutUint64(buf[off:], r.Offset)
 	off += 8
 	binary.BigEndian.PutUint32(buf[off:], r.MaxBytes)
@@ -134,9 +138,11 @@ func DecodeFetchRequest(b []byte) (FetchRequest, error) {
 	}
 	r.Topic = topic
 	off := n
-	if len(b[off:]) < 12 {
+	if len(b[off:]) < 16 {
 		return r, fmt.Errorf("proto: truncated fetch request")
 	}
+	r.Partition = int32(binary.BigEndian.Uint32(b[off:]))
+	off += 4
 	r.Offset = binary.BigEndian.Uint64(b[off:])
 	off += 8
 	r.MaxBytes = binary.BigEndian.Uint32(b[off:])

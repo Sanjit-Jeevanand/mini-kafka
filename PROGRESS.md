@@ -121,3 +121,56 @@ All tests pass under `go test -race`. No data races detected.
 **Rationale:** the project goal is to understand framing, batching, and backpressure — not to ship production traffic. A hand-rolled protocol forces every decision to be explicit (header layout, length check, version byte, max frame size). The fuzz test proves the decoder is safe against adversarial input without a framework doing it invisibly. gRPC remains the right choice for the control plane (Phase 6) where retries and mTLS matter more than learning the mechanism.
 
 **Trade-off:** more code to maintain; no free retry/load-balancing/mTLS from the framework. Accepted for the data plane; revisit for inter-broker RPC in Phase 6.
+
+---
+
+## Phase 3 — Topics, Partitions & Per-Partition Ordering
+
+Goal: parallelism with a strict per-partition ordering guarantee.
+
+### Done
+- [x] `internal/topic/partition.go` — `Partition` wraps one `ilog.Log`; `Append` / `Read` / `HighestOffset` / `Close`; each partition gets its own subdirectory (`partition-0/`, `partition-1/`, …)
+- [x] `internal/topic/partitioner.go` — `Partitioner`: keyed records use FNV-1a hash `% N`; null-key records use sticky atomic round-robin across partitions
+- [x] `internal/topic/topic.go` — `Topic` owns N partitions and one `Partitioner`; `Append(key, record)` routes then appends, returning `(partitionID, offset)`; `Read(partition, offset)` reads from a specific partition; `Close` drains all partitions
+- [x] `internal/proto/messages.go` — `FetchRequest` gains `Partition int32`; `ProduceResponse` gains `Partition int` so clients know where the batch landed
+- [x] `internal/proto/codec.go` — updated wire layouts: `FetchRequest` now `[topic][4 partition][8 offset][4 max_bytes]`; `ProduceResponse` now `[4 partition][8 base_offset][2 err]`
+- [x] `internal/server/handler.go` — `Handler` now holds `*topic.Topic` instead of `*ilog.Log`; `handleProduce` uses first record's key to route the whole batch; `handleFetch` reads from `req.Partition`; `handleMeta` returns real partition count
+- [x] `internal/client/consumer.go` — `Consumer` gains `partition int32` field; `NewConsumer` takes partition as a parameter; `Poll` includes it in every `FetchRequest`
+- [x] `cmd/broker/main.go` — updated to open a `topic.Topic` with configurable `--partitions` flag instead of a raw log
+- [x] `internal/topic/topic_test.go` — 5 tests: golden path, partitioner consistency, null-key rotation, per-partition ordering under 8 concurrent goroutines, partition isolation
+
+### Key concepts learned
+- **Per-partition total order:** Kafka's ordering guarantee is scoped to one partition, not across the whole topic. Within partition 0, record 5 always follows record 4. Across partitions, there is no global ordering. Producers that need two records ordered relative to each other (same user's events, same order's lifecycle) send them to the same partition via the same key.
+- **Partitioning for parallelism:** each partition is an independent `ilog.Log` with its own lock and files. Producers writing to different partitions never contend. Throughput scales linearly with partition count until a hardware bottleneck (disk bandwidth, NIC) is hit.
+- **Key-based routing — FNV-1a hash:** `hash(key) % numPartitions`. Deterministic — same key always maps to the same partition on every broker, every restart, for all time. FNV-1a is fast, in the stdlib, and has good avalanche (similar keys produce very different hashes).
+- **Sticky partitioning for null keys:** naive round-robin rotates per record, scattering a batch of null-key records across N partitions — N RPCs instead of 1. Sticky round-robin picks one partition per batch and holds it, rotating only between batches. Load spreads over time but each batch goes to one place. Kafka adopted this in 2.4 for the same reason.
+- **Goroutines as concurrent writers:** each goroutine is a lightweight Go-managed thread (~2 KB stack, cheap to spawn). The `ilog.Log` mutex serialises concurrent `Append` calls — goroutines queue up, go one at a time, and each gets a unique sequential offset. The test proves this by checking that 8×200 = 1600 concurrent appends produce offsets exactly 0…1599 with no gaps or duplicates.
+- **Partition isolation:** partition 0 at offset 5 and partition 1 at offset 5 are independent records with no relationship. Each partition's offset sequence starts at 0 and increments independently.
+
+### Test results
+```
+--- PASS: TestTopicAppendRead             (0.22s)
+--- PASS: TestPartitionerSameKeyConsistent (0.00s)
+--- PASS: TestPartitionerNullKeyRotates   (0.00s)
+--- PASS: TestPerPartitionOrdering        (6.50s)   # 8 goroutines × 200 records, race-clean
+--- PASS: TestPartitionIsolation          (0.17s)
+ok  github.com/sanjit-jeevanand/mini-kafka/internal/topic  8.230s
+```
+Full suite (`go test -race ./...`) — all packages green, no data races.
+
+### Failure mode pinned as a test
+`TestPerPartitionOrdering`: 8 goroutines write to the same partition concurrently. After all finish, offsets are sorted and checked to be exactly `0, 1, 2, ..., 1599`. Any data race on `nextOffset` inside `ilog.Log` would produce duplicate or out-of-order offsets and fail this test. The `-race` flag independently confirms no unsynchronised memory access.
+
+### Resume bullet
+"Implemented topic partitioning with FNV-1a key-based routing, sticky null-key round-robin, and per-partition total-order guarantee verified under 8 concurrent producers with Go's race detector."
+
+### ADR — Why the broker routes by batch key, not per-record key
+**Decision:** in `handleProduce`, use the first record's key to determine the partition for the entire batch. All records in one `ProduceRequest` land on the same partition.
+
+**Alternatives considered:**
+- *Per-record routing on the broker:* each record in the batch could go to a different partition. Simpler broker logic, but breaks the batch — one RPC splits into N partition writes with N different base offsets, requiring a more complex response format.
+- *Client-side partition routing:* the producer client groups records by partition before sending, sending one `ProduceRequest` per partition. This is what real Kafka does. Deferred to Phase 5 when the client gains full partition metadata and multi-broker routing.
+
+**Rationale:** for Phase 3 (single broker), routing on the server by batch key keeps the wire format and client simple while still demonstrating the partitioning concept. The invariant — all records in one batch share a partition — is enforced by convention and documented. Phase 5 moves routing to the client where it belongs.
+
+**Trade-off:** a batch with mixed keys (records for different users) all land on one partition, losing some parallelism. Acceptable for Phase 3; fixed in Phase 5 with client-side per-partition batching.

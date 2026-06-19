@@ -7,22 +7,22 @@ import (
 	"testing"
 	"time"
 
-	ilog "github.com/sanjit-jeevanand/mini-kafka/internal/log"
 	"github.com/sanjit-jeevanand/mini-kafka/internal/server"
+	"github.com/sanjit-jeevanand/mini-kafka/internal/topic"
 )
 
-// newTestBroker spins up a real broker on a random port backed by a real log.
+// newTestBroker spins up a real broker on a random port backed by a real topic.
 // Returns the broker address and a cancel func that shuts everything down.
 func newTestBroker(t *testing.T) (addr string, cancel context.CancelFunc) {
 	t.Helper()
 
-	l, err := ilog.New(ilog.Options{Dir: t.TempDir()})
+	tp, err := topic.Open("test", topic.Options{Dir: t.TempDir(), NumPartitions: 1})
 	if err != nil {
-		t.Fatalf("ilog.New: %v", err)
+		t.Fatalf("topic.Open: %v", err)
 	}
-	t.Cleanup(func() { l.Close() })
+	t.Cleanup(func() { tp.Close() })
 
-	h := server.NewHandler(l, "127.0.0.1:0")
+	h := server.NewHandler(tp, "127.0.0.1:0")
 	srv := server.NewServer("127.0.0.1:0", h, 64)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -87,7 +87,7 @@ func TestProducerConsumerRoundTrip(t *testing.T) {
 	}
 
 	// Consume all records back.
-	cons := NewConsumer(c, topic, 0)
+	cons := NewConsumer(c, topic, 0, 0)
 	var msgs []Message
 	for len(msgs) < n {
 		batch, err := cons.Poll()
@@ -126,7 +126,7 @@ func TestConsumerSeek(t *testing.T) {
 		}
 	}
 
-	cons := NewConsumer(c, "seek-topic", 0)
+	cons := NewConsumer(c, "seek-topic", 0, 0)
 
 	// Drain 10 messages.
 	var got int

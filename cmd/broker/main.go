@@ -8,29 +8,35 @@ import (
 	"os/signal"
 	"syscall"
 
-	ilog "github.com/sanjit-jeevanand/mini-kafka/internal/log"
 	"github.com/sanjit-jeevanand/mini-kafka/internal/server"
+	"github.com/sanjit-jeevanand/mini-kafka/internal/topic"
 )
 
 func main() {
 	addr := flag.String("addr", ":9092", "TCP address to listen on")
 	dir := flag.String("dir", "/tmp/mini-kafka", "Directory to store log segments")
+	topicName := flag.String("topic", "default", "Topic name")
+	numPartitions := flag.Int("partitions", 4, "Number of partitions")
 	maxConns := flag.Int("max-conns", 1024, "Maximum concurrent connections")
 	flag.Parse()
 
-	l, err := ilog.New(ilog.Options{Dir: *dir})
+	t, err := topic.Open(*topicName, topic.Options{
+		Dir:           *dir,
+		NumPartitions: *numPartitions,
+	})
 	if err != nil {
-		log.Fatalf("open log: %v", err)
+		log.Fatalf("open topic: %v", err)
 	}
-	defer l.Close()
+	defer t.Close()
 
-	h := server.NewHandler(l, *addr)
+	h := server.NewHandler(t, *addr)
 	srv := server.NewServer(*addr, h, *maxConns)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	log.Printf("broker listening on %s (data dir: %s)", *addr, *dir)
+	log.Printf("broker listening on %s (topic: %s, partitions: %d, dir: %s)",
+		*addr, *topicName, *numPartitions, *dir)
 
 	ready := make(chan struct{})
 	go func() {

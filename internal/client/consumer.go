@@ -17,19 +17,21 @@ type Message struct {
 	Value     []byte
 }
 
-// Consumer fetches records from a topic starting at a given offset.
+// Consumer fetches records from a topic partition starting at a given offset.
 // It tracks the next offset internally so callers just call Poll repeatedly.
 type Consumer struct {
-	client      *Client
-	topic       string
-	nextOffset  uint64
-	maxBytes    uint32
+	client     *Client
+	topic      string
+	partition  int32
+	nextOffset uint64
+	maxBytes   uint32
 }
 
-func NewConsumer(c *Client, topic string, startOffset uint64) *Consumer {
+func NewConsumer(c *Client, topic string, partition int32, startOffset uint64) *Consumer {
 	return &Consumer{
 		client:     c,
 		topic:      topic,
+		partition:  partition,
 		nextOffset: startOffset,
 		maxBytes:   defaultFetchMaxBytes,
 	}
@@ -39,9 +41,10 @@ func NewConsumer(c *Client, topic string, startOffset uint64) *Consumer {
 // Returns an empty slice (not an error) when there are no new records yet.
 func (p *Consumer) Poll() ([]Message, error) {
 	req := proto.FetchRequest{
-		Topic:    p.topic,
-		Offset:   p.nextOffset,
-		MaxBytes: p.maxBytes,
+		Topic:     p.topic,
+		Partition: p.partition,
+		Offset:    p.nextOffset,
+		MaxBytes:  p.maxBytes,
 	}
 
 	p.client.mu.Lock()
