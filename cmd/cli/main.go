@@ -50,7 +50,8 @@ func main() {
 			log.Fatal("produce requires <topic> <key> <value>")
 		}
 		p := client.NewProducer(c, topic, 1, 0)
-		offset, err := p.Send([]byte(args[2]), []byte(args[3]))
+		var offset uint64
+		offset, err = p.Send([]byte(args[2]), []byte(args[3]))
 		if err != nil {
 			log.Fatalf("produce: %v", err)
 		}

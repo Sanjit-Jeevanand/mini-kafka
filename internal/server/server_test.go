@@ -231,7 +231,9 @@ func TestConcurrentProducers(t *testing.T) {
 	var nextOffset uint64
 	for {
 		req := proto.FetchRequest{Topic: "test", Offset: nextOffset, MaxBytes: 128 * 1024}
-		proto.WriteFrame(conn, proto.TypeFetchRequest, proto.EncodeFetchRequest(req))
+		if err := proto.WriteFrame(conn, proto.TypeFetchRequest, proto.EncodeFetchRequest(req)); err != nil {
+			break
+		}
 		_, payload, err := proto.ReadFrame(conn)
 		if err != nil {
 			break

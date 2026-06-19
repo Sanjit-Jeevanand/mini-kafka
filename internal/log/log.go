@@ -43,7 +43,8 @@ func New(opts Options) (*Log, error) {
 
 	l := &Log{opts: opts}
 	for _, base := range bases {
-		seg, err := openSegment(opts.Dir, base, opts.MaxBytes)
+		var seg *Segment
+		seg, err = openSegment(opts.Dir, base, opts.MaxBytes)
 		if err != nil {
 			l.Close()
 			return nil, err

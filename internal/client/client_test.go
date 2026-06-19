@@ -121,8 +121,8 @@ func TestConsumerSeek(t *testing.T) {
 	const n = 20
 	p := NewProducer(c, "seek-topic", 1, 0)
 	for i := 0; i < n; i++ {
-		if _, err := p.Send(nil, []byte(fmt.Sprintf("v%d", i))); err != nil {
-			t.Fatalf("Send %d: %v", i, err)
+		if _, sendErr := p.Send(nil, []byte(fmt.Sprintf("v%d", i))); sendErr != nil {
+			t.Fatalf("Send %d: %v", i, sendErr)
 		}
 	}
 
@@ -131,7 +131,8 @@ func TestConsumerSeek(t *testing.T) {
 	// Drain 10 messages.
 	var got int
 	for got < 10 {
-		msgs, err := cons.Poll()
+		var msgs []Message
+		msgs, err = cons.Poll()
 		if err != nil {
 			t.Fatalf("Poll: %v", err)
 		}

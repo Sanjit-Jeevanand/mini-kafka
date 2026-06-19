@@ -78,8 +78,8 @@ func TestRestart(t *testing.T) {
 	}
 	const n = 50
 	appendN(t, l, n)
-	if err := l.Close(); err != nil {
-		t.Fatal(err)
+	if closeErr := l.Close(); closeErr != nil {
+		t.Fatal(closeErr)
 	}
 
 	l2, err := New(Options{Dir: dir})
@@ -124,8 +124,8 @@ func TestTornWriteRecovery(t *testing.T) {
 
 	// Grab the active segment file path before closing.
 	segFile := l.active.file.Name()
-	if err := l.Close(); err != nil {
-		t.Fatal(err)
+	if closeErr := l.Close(); closeErr != nil {
+		t.Fatal(closeErr)
 	}
 
 	// Append garbage bytes to simulate a torn write.
@@ -145,7 +145,8 @@ func TestTornWriteRecovery(t *testing.T) {
 
 	// All original records readable.
 	for i := 0; i < n; i++ {
-		rec, err := l2.Read(ctx, uint64(i))
+		var rec Record
+		rec, err = l2.Read(ctx, uint64(i))
 		if err != nil {
 			t.Fatalf("Read(%d) after torn write recovery: %v", i, err)
 		}

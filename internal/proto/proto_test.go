@@ -149,7 +149,7 @@ func TestFrameTooLarge(t *testing.T) {
 		hdr[5] = 0x01 // version = 1
 		hdr[6] = 0x00
 		hdr[7] = 0x01 // type = TypeProduceRequest
-		client.Write(hdr)
+		_, _ = client.Write(hdr)
 	}()
 
 	_, _, err := ReadFrame(server)
@@ -170,7 +170,7 @@ func TestFrameBadVersion(t *testing.T) {
 		hdr[5] = 0x63 // version 99
 		hdr[6] = 0x00
 		hdr[7] = 0x01
-		client.Write(hdr)
+		_, _ = client.Write(hdr)
 	}()
 
 	_, _, err := ReadFrame(server)
@@ -199,7 +199,7 @@ func FuzzReadFrame(f *testing.F) {
 		defer server.Close()
 
 		go func() {
-			client.Write(data)
+			_, _ = client.Write(data)
 			client.Close()
 		}()
 

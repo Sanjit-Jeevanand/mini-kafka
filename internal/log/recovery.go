@@ -6,7 +6,7 @@ import (
 )
 
 func Recover(f *os.File, idx *Index, baseOffset uint64) (nextOffset uint64, err error) {
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
+	if _, err = f.Seek(0, io.SeekStart); err != nil {
 		return 0, err
 	}
 
