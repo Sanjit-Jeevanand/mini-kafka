@@ -48,6 +48,17 @@ func openSegment(dir string, baseOffset uint64, maxBytes uint32) (*Segment, erro
 }
 
 func (s *Segment) Append(r Record) (uint64, error) {
+	offset, err := s.appendNoSync(r)
+	if err != nil {
+		return 0, err
+	}
+	if err := s.file.Sync(); err != nil {
+		return 0, err
+	}
+	return offset, nil
+}
+
+func (s *Segment) appendNoSync(r Record) (uint64, error) {
 	r.Offset = s.nextOffset
 	r.Timestamp = time.Now().UnixNano()
 
@@ -56,9 +67,6 @@ func (s *Segment) Append(r Record) (uint64, error) {
 
 	pos := s.size
 	if _, err := s.file.Write(buf); err != nil {
-		return 0, err
-	}
-	if err := s.file.Sync(); err != nil {
 		return 0, err
 	}
 
@@ -70,6 +78,10 @@ func (s *Segment) Append(r Record) (uint64, error) {
 	offset := s.nextOffset
 	s.nextOffset++
 	return offset, nil
+}
+
+func (s *Segment) sync() error {
+	return s.file.Sync()
 }
 
 func (s *Segment) Read(absoluteOffset uint64) (Record, error) {
