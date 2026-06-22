@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mini-kafka — Distributed Commit Log in Go</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy: #0F172A;
+      --navy-2: #1E293B;
+      --navy-3: #334155;
+      --blue: #2563EB;
+      --blue-light: #3B82F6;
+      --blue-dim: #1D4ED8;
+      --sky: #BAE6FD;
+      --slate: #94A3B8;
+      --slate-light: #CBD5E1;
+      --line: rgba(255,255,255,0.07);
+      --text: #F1F5F9;
+      --muted: #94A3B8;
+      --green: #10B981;
+      --amber: #F59E0B;
+      --red: #EF4444;
+      --mono: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--navy);
+      color: var(--text);
+      font-family: -apple-system, "Inter", "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--blue-light); text-decoration: none; }
+    a:hover { color: var(--sky); }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,23,42,0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+      padding: 0 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
+    }
+    .nav-brand {
+      font-family: var(--mono);
+      font-size: 15px; font-weight: 600;
+      color: var(--text);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .nav-brand .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .nav-links { display: flex; align-items: center; gap: 1.5rem; }
+    .nav-links a {
+      font-size: 14px; color: var(--muted);
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-gh {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text) !important;
+      background: var(--navy-2);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 6px 14px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .nav-gh:hover { border-color: rgba(255,255,255,0.25); background: var(--navy-3); }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 860px; margin: 0 auto;
+      padding: 7rem 2rem 5rem;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 12px;
+      color: var(--blue-light);
+      background: rgba(37,99,235,0.12);
+      border: 1px solid rgba(37,99,235,0.3);
+      border-radius: 20px; padding: 5px 14px;
+      margin-bottom: 2rem;
+    }
+    .hero h1 {
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 800; letter-spacing: -1.5px;
+      color: #fff; line-height: 1.1;
+      margin-bottom: 1.25rem;
+    }
+    .hero h1 span { color: var(--blue-light); }
+    .hero p {
+      font-size: 1.15rem; color: var(--muted);
+      max-width: 600px; margin: 0 auto 2.5rem;
+      line-height: 1.7;
+    }
+    .hero-actions {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1rem; flex-wrap: wrap;
+    }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--blue); color: #fff;
+      font-size: 14px; font-weight: 600;
+      padding: 10px 22px; border-radius: 9px;
+      border: 1px solid var(--blue-dim);
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: var(--blue-light); color: #fff; }
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: transparent; color: var(--text);
+      font-size: 14px; font-weight: 500;
+      padding: 10px 22px; border-radius: 9px;
+      border: 1px solid rgba(255,255,255,0.12);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .btn-secondary:hover { border-color: rgba(255,255,255,0.25); background: var(--navy-2); color: var(--text); }
+
+    /* ── Metrics strip ── */
+    .metrics {
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: var(--navy-2);
+    }
+    .metrics-inner {
+      max-width: 860px; margin: 0 auto;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      padding: 0;
+    }
+    .metric {
+      padding: 2rem 1.5rem;
+      border-right: 1px solid var(--line);
+      text-align: center;
+    }
+    .metric:last-child { border-right: none; }
+    .metric-value {
+      font-size: 2.2rem; font-weight: 800;
+      letter-spacing: -1px; color: #fff;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .metric-value .unit { font-size: 1rem; font-weight: 500; color: var(--blue-light); margin-left: 3px; }
+    .metric-label {
+      font-size: 13px; color: var(--muted);
+    }
+
+    /* ── Sections ── */
+    .section {
+      max-width: 860px; margin: 0 auto;
+      padding: 5rem 2rem;
+    }
+    .section-label {
+      font-family: var(--mono); font-size: 11px;
+      color: var(--blue-light); letter-spacing: 2px;
+      text-transform: uppercase; margin-bottom: 0.75rem;
+    }
+    .section h2 {
+      font-size: 1.9rem; font-weight: 800;
+      letter-spacing: -0.5px; color: #fff;
+      margin-bottom: 1rem;
+    }
+    .section > p {
+      color: var(--muted); max-width: 600px;
+      margin-bottom: 2.5rem;
+    }
+
+    /* ── Architecture ── */
+    .arch-wrap {
+      background: var(--navy-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .arch {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 1px;
+      background: var(--line);
+    }
+    .arch-box {
+      background: var(--navy-2);
+      padding: 1.4rem 0.75rem;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      height: 120px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 6px;
+      position: relative;
+    }
+    .arch-box::after {
+      content: '';
+      position: absolute; bottom: 0; left: 10%; right: 10%;
+      height: 2px; background: var(--blue-light);
+      transform: scaleX(0);
+      transition: transform 0.2s;
+      border-radius: 1px;
+    }
+    .arch-box:hover, .arch-box.active {
+      background: rgba(37,99,235,0.08);
+    }
+    .arch-box:hover::after, .arch-box.active::after {
+      transform: scaleX(1);
+    }
+    .arch-icon {
+      font-size: 24px; line-height: 1;
+      flex-shrink: 0;
+    }
+    .arch-name {
+      font-family: var(--mono); font-size: 11px;
+      color: var(--blue-light); font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    .arch-desc {
+      font-size: 10px; color: var(--muted);
+      line-height: 1.4;
+    }
+    .arch-detail {
+      border-top: 1px solid var(--line);
+      padding: 1.25rem 1.5rem;
+      display: none;
+    }
+    .arch-detail.visible { display: block; }
+    .arch-detail-title {
+      font-size: 14px; font-weight: 700; color: #fff;
+      margin-bottom: 6px;
+    }
+    .arch-detail-body {
+      font-size: 13px; color: var(--muted);
+      line-height: 1.7; max-width: 640px;
+    }
+    .arch-detail-tags {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .arch-detail-tag {
+      font-family: var(--mono); font-size: 10.5px;
+      color: var(--blue-light);
+      background: rgba(37,99,235,0.1);
+      border: 1px solid rgba(37,99,235,0.2);
+      border-radius: 5px; padding: 2px 8px;
+    }
+
+    /* ── Bullets ── */
+    .bullets { display: flex; flex-direction: column; gap: 1.25rem; }
+    .bullet-card {
+      background: var(--navy-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: grid; grid-template-columns: 48px 1fr auto;
+      gap: 1rem; align-items: start;
+    }
+    .bullet-num {
+      width: 48px; height: 48px;
+      background: rgba(37,99,235,0.15);
+      border: 1px solid rgba(37,99,235,0.3);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 18px;
+      font-weight: 700; color: var(--blue-light);
+      flex-shrink: 0;
+    }
+    .bullet-body h3 {
+      font-size: 15px; font-weight: 700; color: #fff;
+      margin-bottom: 6px;
+    }
+    .bullet-body p {
+      font-size: 13.5px; color: var(--muted);
+      line-height: 1.65;
+    }
+    .bullet-stat {
+      text-align: right; flex-shrink: 0;
+    }
+    .bullet-stat .bv {
+      font-family: var(--mono); font-size: 17px;
+      font-weight: 700; color: var(--green);
+      white-space: nowrap;
+    }
+    .bullet-stat .bl {
+      font-size: 11px; color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── Phase timeline ── */
+    .phases { display: flex; flex-direction: column; gap: 0; }
+    .phase {
+      display: grid; grid-template-columns: 56px 1fr;
+      gap: 1rem;
+      padding: 1.25rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .phase:last-child { border-bottom: none; }
+    .phase-num {
+      width: 36px; height: 36px;
+      background: var(--navy-2);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 12px;
+      font-weight: 600; color: var(--muted);
+      margin-top: 2px;
+    }
+    .phase-num.active {
+      background: rgba(37,99,235,0.15);
+      border-color: rgba(37,99,235,0.4);
+      color: var(--blue-light);
+    }
+    .phase-content h4 {
+      font-size: 14px; font-weight: 600; color: #fff;
+      margin-bottom: 3px;
+    }
+    .phase-content p {
+      font-size: 13px; color: var(--muted);
+    }
+    .phase-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .tag {
+      font-family: var(--mono); font-size: 10.5px;
+      color: var(--blue-light);
+      background: rgba(37,99,235,0.1);
+      border: 1px solid rgba(37,99,235,0.2);
+      border-radius: 5px; padding: 2px 8px;
+    }
+    .tag.green { color: var(--green); background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); }
+    .tag.amber { color: var(--amber); background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); }
+
+    /* ── Stack ── */
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+    .stack-card {
+      background: var(--navy-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+    }
+    .stack-card .sc-label {
+      font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .stack-card .sc-val {
+      font-family: var(--mono); font-size: 13px;
+      color: var(--text); font-weight: 600;
+    }
+
+    /* ── Terminal ── */
+    .terminal {
+      background: #020617;
+      border: 1px solid var(--line);
+      border-radius: 12px; overflow: hidden;
+      margin-top: 2.5rem;
+    }
+    .term-bar {
+      background: var(--navy-2);
+      padding: 10px 16px;
+      display: flex; align-items: center; gap: 6px;
+      border-bottom: 1px solid var(--line);
+    }
+    .term-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .term-body {
+      padding: 1.25rem 1.5rem;
+      font-family: var(--mono); font-size: 13px;
+      line-height: 2; color: #64748B;
+    }
+    .term-body .pr { color: #10B981; }
+    .term-body .cmd { color: #E2E8F0; }
+    .term-body .out { color: #64748B; }
+    .term-body .hi { color: #3B82F6; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 2rem;
+      text-align: center;
+      color: var(--muted); font-size: 13px;
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--text); }
+
+    /* ── Divider ── */
+    .div { border: none; border-top: 1px solid var(--line); }
+
+    @media (max-width: 600px) {
+      .metrics-inner { grid-template-columns: 1fr; }
+      .metric { border-right: none; border-bottom: 1px solid var(--line); }
+      .metric:last-child { border-bottom: none; }
+      .bullet-card { grid-template-columns: 40px 1fr; }
+      .bullet-stat { grid-column: 2; }
+      .arch { gap: 4px; }
+      .arch-arrow { display: none; }
+      nav { padding: 0 1rem; }
+      .nav-links .nav-gh { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav>
+  <div class="nav-brand">
+    <span class="dot" aria-hidden="true"></span>
+    mini-kafka
+  </div>
+  <div class="nav-links">
+    <a href="#how-it-works">Architecture</a>
+    <a href="#results">Results</a>
+    <a href="#phases">Phases</a>
+    <a href="https://github.com/sanjit-jeevanand/mini-kafka" class="nav-gh" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="hero-badge">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="3" fill="#10B981"/></svg>
+    Kafka-inspired · Pure Go · No dependencies
+  </div>
+  <h1>A distributed commit log<br><span>built from scratch</span></h1>
+  <p>Segmented storage, sparse indexing, ISR replication, epoch-fenced leader election,
+     and group commit batching — sustaining 245k records/sec at P99&nbsp;&lt;&nbsp;20ms.</p>
+  <div class="hero-actions">
+    <a href="https://github.com/sanjit-jeevanand/mini-kafka" class="btn-primary" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+      View on GitHub
+    </a>
+    <a href="#results" class="btn-secondary">See the numbers</a>
+  </div>
+</section>
+
+<!-- ── Metrics ── -->
+<div class="metrics">
+  <div class="metrics-inner">
+    <div class="metric">
+      <div class="metric-value">245k<span class="unit">rec/s</span></div>
+      <div class="metric-label">peak throughput · group commit</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value">18.4<span class="unit">ms</span></div>
+      <div class="metric-label">P99 write latency</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value">10k</div>
+      <div class="metric-label">fault scenarios validated</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Architecture ── -->
+<section class="section" id="how-it-works">
+  <div class="section-label">Architecture</div>
+  <h2>How it works</h2>
+  <p>Eight phases, each building on the last. Every layer is independently tested and documented.</p>
+
+  <div class="arch-wrap">
+    <div class="arch">
+      <div class="arch-box" data-idx="0">
+        <span class="arch-icon">📦</span>
+        <div class="arch-name">Producer</div>
+        <div class="arch-desc">Idempotent sends</div>
+      </div>
+      <div class="arch-box" data-idx="1">
+        <span class="arch-icon">⚡</span>
+        <div class="arch-name">Group Commit</div>
+        <div class="arch-desc">Batch fsync</div>
+      </div>
+      <div class="arch-box" data-idx="2">
+        <span class="arch-icon">📂</span>
+        <div class="arch-name">Segment Log</div>
+        <div class="arch-desc">CRC + sparse index</div>
+      </div>
+      <div class="arch-box" data-idx="3">
+        <span class="arch-icon">🔁</span>
+        <div class="arch-name">ISR Replication</div>
+        <div class="arch-desc">High-watermark</div>
+      </div>
+      <div class="arch-box" data-idx="4">
+        <span class="arch-icon">🗳️</span>
+        <div class="arch-name">Leader Election</div>
+        <div class="arch-desc">Epoch fencing</div>
+      </div>
+      <div class="arch-box" data-idx="5">
+        <span class="arch-icon">🧪</span>
+        <div class="arch-name">Fault Sim</div>
+        <div class="arch-desc">Seeded RNG</div>
+      </div>
+    </div>
+    <div class="arch-detail" id="arch-detail">
+      <div class="arch-detail-title" id="arch-detail-title"></div>
+      <div class="arch-detail-body" id="arch-detail-body"></div>
+      <div class="arch-detail-tags" id="arch-detail-tags"></div>
+    </div>
+  </div>
+
+  <script>
+    const ARCH_DATA = [
+      {
+        title: "Idempotent Producer",
+        body: "A SequenceTracker on the broker detects duplicate sends from producers that retry after a network error — returning the cached offset instead of writing a second record. The producer ID and monotonic sequence number are encoded directly into the record key, so zero changes are needed to the wire protocol or log format.",
+        tags: ["sequence.go", "producer.go", "EncodeKey", "nextSeq after ACK"]
+      },
+      {
+        title: "Group Commit",
+        body: "A background goroutine drains all pending append requests in a single pass, writes them all with appendNoSync(), calls sync() once, then fans results back to every blocked caller. Batch size is emergent — more concurrent producers means more requests pile up between flushes, giving larger batches and fewer fsyncs per record. 800x speedup over per-record fsync at 500 workers.",
+        tags: ["groupcommit.go", "MaxBatchSize", "MaxBatchWait", "245k rec/s", "P99 18.4ms"]
+      },
+      {
+        title: "Segmented Commit Log",
+        body: "Records are CRC-stamped on write and verified on read. A sparse offset index gives O(log n) seeks without per-record memory — one 8-byte entry per 4KB of log data. Segments roll at a configurable byte limit so retention is a file unlink. A crash-safe recovery pass truncates torn writes on restart.",
+        tags: ["record.go", "index.go", "segment.go", "recovery.go", "8B per index entry"]
+      },
+      {
+        title: "ISR Replication",
+        body: "In-Sync Replicas are the set of followers caught up within a configurable lag. A write is acknowledged only when all ISR members have confirmed it. Consumers only read up to the high-watermark — the highest offset every ISR member holds — so no record can disappear after a failover. Zero acknowledged-record loss across all tested failure modes.",
+        tags: ["replication.go", "high-watermark", "ISR shrink/expand", "acks=all"]
+      },
+      {
+        title: "Leader Election and Epoch Fencing",
+        body: "A monotonically increasing epoch is persisted to the ilog before every leadership transition. Any RPC carrying an epoch lower than the current controller epoch is rejected immediately. A partitioned leader that comes back cannot write to followers — its epoch is stale. The controller polls every 500ms; a leader is declared dead after missing heartbeats for 2s, giving sub-3s failover end-to-end.",
+        tags: ["epoch.go", "election.go", "controller.go", "sub-3s failover", "ErrFenced"]
+      },
+      {
+        title: "Deterministic Fault Simulator",
+        body: "Same seed always produces the same fault schedule. The Network uses a seeded math/rand under a mutex — all RNG calls happen before the actual operation, so the fault pattern is fixed regardless of goroutine scheduling. SimClock.Sleep() calls Advance() with zero wall-clock cost, letting 10,000 fault scenarios run in under 2 seconds. Found 7 correctness bugs invisible to unit tests.",
+        tags: ["sim/clock.go", "sim/network.go", "ErrDropped", "10k scenarios", "7 bugs found"]
+      }
+    ];
+
+    const boxes = document.querySelectorAll('.arch-box');
+    const detail = document.getElementById('arch-detail');
+    const detailTitle = document.getElementById('arch-detail-title');
+    const detailBody = document.getElementById('arch-detail-body');
+    const detailTags = document.getElementById('arch-detail-tags');
+
+    let activeIdx = null;
+
+    boxes.forEach(box => {
+      box.addEventListener('click', () => {
+        const idx = parseInt(box.dataset.idx);
+        if (activeIdx === idx) {
+          activeIdx = null;
+          box.classList.remove('active');
+          detail.classList.remove('visible');
+          return;
+        }
+        boxes.forEach(b => b.classList.remove('active'));
+        box.classList.add('active');
+        activeIdx = idx;
+        const d = ARCH_DATA[idx];
+        detailTitle.textContent = d.title;
+        detailBody.textContent = d.body;
+        detailTags.innerHTML = d.tags.map(t => `<span class="arch-detail-tag">${t}</span>`).join('');
+        detail.classList.add('visible');
+      });
+    });
+  </script>
+</section>
+
+<hr class="div">
+
+<!-- ── Results ── -->
+<section class="section" id="results">
+  <div class="section-label">Results</div>
+  <h2>By the numbers</h2>
+
+  <div class="bullets">
+
+    <div class="bullet-card">
+      <div class="bullet-num">01</div>
+      <div class="bullet-body">
+        <h3>Throughput &amp; latency</h3>
+        <p>Group commit amortises <code>fsync</code> cost across concurrent writers — one sync covers
+           hundreds of records instead of one. Batch size is emergent: more concurrent producers
+           means larger batches, which means fewer fsyncs per record.</p>
+      </div>
+      <div class="bullet-stat">
+        <div class="bv">183k–245k</div>
+        <div class="bl">rec/s · P99 18.4ms</div>
+      </div>
+    </div>
+
+    <div class="bullet-card">
+      <div class="bullet-num">02</div>
+      <div class="bullet-body">
+        <h3>Replication &amp; failover</h3>
+        <p>ISR-based replication with high-watermark consistency ensures consumers never read
+           un-replicated records. Epoch-fenced leader election prevents stale leaders from writing
+           after a new leader has been elected — zero split-brain, zero acknowledged-record loss.</p>
+      </div>
+      <div class="bullet-stat">
+        <div class="bv">0 lost</div>
+        <div class="bl">records · &lt;3s failover</div>
+      </div>
+    </div>
+
+    <div class="bullet-card">
+      <div class="bullet-num">03</div>
+      <div class="bullet-body">
+        <h3>Fault injection</h3>
+        <p>Deterministic simulator with seeded RNG: same seed → same fault schedule every run.
+           Crashed leaders, network partitions, message delays and reorderings — all reproducible.
+           Found 7 correctness bugs invisible to unit tests.</p>
+      </div>
+      <div class="bullet-stat">
+        <div class="bv">10,000</div>
+        <div class="bl">scenarios · 7 bugs found</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ── Phases ── -->
+<section class="section" id="phases">
+  <div class="section-label">Implementation</div>
+  <h2>8 phases, ~40 source files</h2>
+  <p>Built incrementally — each phase has its own PDF writeup, test suite, and can be read in isolation.</p>
+
+  <div class="phases">
+
+    <div class="phase">
+      <div class="phase-num active">01</div>
+      <div class="phase-content">
+        <h4>Segmented Commit Log</h4>
+        <p>CRC-stamped records, 8-byte sparse index entries, segment rolling, crash recovery. 7 tests including property test and torn-write simulation.</p>
+        <div class="phase-tags">
+          <span class="tag">record.go</span>
+          <span class="tag">index.go</span>
+          <span class="tag">segment.go</span>
+          <span class="tag">recovery.go</span>
+          <span class="tag green">7 tests</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num active">02</div>
+      <div class="phase-content">
+        <h4>Wire Protocol &amp; TCP Server</h4>
+        <p>Length-prefixed binary framing, semaphore-based backpressure, graceful SIGTERM shutdown, linger-timer producer batching. Fuzz-tested decoder.</p>
+        <div class="phase-tags">
+          <span class="tag">frame.go</span>
+          <span class="tag">codec.go</span>
+          <span class="tag">server.go</span>
+          <span class="tag green">17 tests</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num active">03</div>
+      <div class="phase-content">
+        <h4>Topics, Partitions &amp; Ordering</h4>
+        <p>Per-partition append-only logs, key-hashed routing, sticky producer assignment. Per-partition ordering guarantee.</p>
+        <div class="phase-tags">
+          <span class="tag">topic.go</span>
+          <span class="tag">partition.go</span>
+          <span class="tag green">tests passing</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num active">04</div>
+      <div class="phase-content">
+        <h4>Consumer Groups &amp; Sticky Rebalance</h4>
+        <p>Group coordinator, sticky partition assignment to minimise rebalance churn, durable offset commits to an internal log.</p>
+        <div class="phase-tags">
+          <span class="tag">coordinator.go</span>
+          <span class="tag">rebalance.go</span>
+          <span class="tag green">tests passing</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num active">05</div>
+      <div class="phase-content">
+        <h4>ISR Replication</h4>
+        <p>Leader–follower log replication, high-watermark tracking, follower fetch loop, ISR shrink and expand on lag detection.</p>
+        <div class="phase-tags">
+          <span class="tag">replication.go</span>
+          <span class="tag">isr.go</span>
+          <span class="tag green">tests passing</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num active">06</div>
+      <div class="phase-content">
+        <h4>Leader Election &amp; Epoch Fencing</h4>
+        <p>Durable monotonic EpochStore, controller polling loop, NeedsElection / Elect pure functions, Fence() rejects stale epochs. 5 tests including split-brain scenario.</p>
+        <div class="phase-tags">
+          <span class="tag">epoch.go</span>
+          <span class="tag">election.go</span>
+          <span class="tag">controller.go</span>
+          <span class="tag green">5 tests</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num active">07</div>
+      <div class="phase-content">
+        <h4>Fault Injection Simulator</h4>
+        <p>SimClock (zero wall-clock cost), seeded Network with drop/delay, invariant checker (CheckAllOwned, CheckMonotonic, CheckNoRegression), Reproduce() for replay. 10 tests, race-clean.</p>
+        <div class="phase-tags">
+          <span class="tag">sim/clock.go</span>
+          <span class="tag">sim/network.go</span>
+          <span class="tag">sim/simulator.go</span>
+          <span class="tag green">10 tests</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num active">08</div>
+      <div class="phase-content">
+        <h4>Idempotent Producer &amp; Group Commit</h4>
+        <p>SequenceTracker dedup, EncodeKey wire format, appendNoSync + batch sync(), MaxBatchSize / MaxBatchWait config, CI perf gate with 10% regression threshold.</p>
+        <div class="phase-tags">
+          <span class="tag">sequence.go</span>
+          <span class="tag">groupcommit.go</span>
+          <span class="tag">eval/metrics.go</span>
+          <span class="tag green">9 tests</span>
+          <span class="tag amber">245k rec/s</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ── Stack ── -->
+<section class="section">
+  <div class="section-label">Stack</div>
+  <h2>Technology</h2>
+  <p>Pure Go — no external runtime dependencies in the broker binary.</p>
+
+  <div class="stack-grid">
+    <div class="stack-card">
+      <div class="sc-label">Language</div>
+      <div class="sc-val">Go 1.25</div>
+    </div>
+    <div class="stack-card">
+      <div class="sc-label">Storage</div>
+      <div class="sc-val">os.File + fsync</div>
+    </div>
+    <div class="stack-card">
+      <div class="sc-label">Network</div>
+      <div class="sc-val">Raw TCP</div>
+    </div>
+    <div class="stack-card">
+      <div class="sc-label">Serialisation</div>
+      <div class="sc-val">encoding/binary</div>
+    </div>
+    <div class="stack-card">
+      <div class="sc-label">Runtime</div>
+      <div class="sc-val">Alpine Docker</div>
+    </div>
+    <div class="stack-card">
+      <div class="sc-label">Tests</div>
+      <div class="sc-val">go test -race</div>
+    </div>
+  </div>
+
+  <div class="terminal">
+    <div class="term-bar">
+      <div class="term-dot" style="background:#EF4444"></div>
+      <div class="term-dot" style="background:#F59E0B"></div>
+      <div class="term-dot" style="background:#10B981"></div>
+    </div>
+    <div class="term-body">
+      <span class="pr">$</span> <span class="cmd">go run ./cmd/metrics/ -workers 500 -duration 5s</span><br>
+      <span class="out">measuring: 500 workers, 5s window...</span><br><br>
+      <span class="out">Bullet 1 — throughput &amp; latency</span><br>
+      <span class="hi">&nbsp;&nbsp;Group commit: 183,682–244,909 rec/s &nbsp; P50: 9.2ms &nbsp; P99: 18.4ms</span><br><br>
+      <span class="out">Bullet 2 — replication &amp; failover</span><br>
+      <span class="hi">&nbsp;&nbsp;Acknowledged lost records: 0 &nbsp; Failover: 1200ms–2400ms</span><br><br>
+      <span class="out">Bullet 3 — fault injection</span><br>
+      <span class="hi">&nbsp;&nbsp;Scenarios: 10,000 &nbsp; Seeds: 100 &nbsp; Violations found: 7</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+  <p>
+    Built by <a href="https://github.com/sanjit-jeevanand" target="_blank" rel="noopener">Sanjit Jeevanand</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/sanjit-jeevanand/mini-kafka" target="_blank" rel="noopener">github.com/sanjit-jeevanand/mini-kafka</a>
+  </p>
+</footer>
+
+</body>
+</html>
