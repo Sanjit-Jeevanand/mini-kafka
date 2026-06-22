@@ -1,0 +1,8 @@
+sanjit-ml.com, www.sanjit-ml.com {
+	root * /srv
+	file_server
+	encode gzip
+
+	@www host www.sanjit-ml.com
+	redir @www https://sanjit-ml.com{uri} permanent
+}
