@@ -6,3 +6,11 @@ sanjit-ml.com, www.sanjit-ml.com {
 	@www host www.sanjit-ml.com
 	redir @www https://sanjit-ml.com{uri} permanent
 }
+
+rag.sanjit-ml.com {
+	reverse_proxy host.docker.internal:8000
+}
+
+decisiondesk.sanjit-ml.com {
+	reverse_proxy host.docker.internal:8080
+}

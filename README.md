@@ -12,6 +12,7 @@ Segmented storage · sparse indexing · ISR replication · epoch-fenced leader e
 [![Race](https://img.shields.io/badge/-race-clean-success)](#testing)
 [![Throughput](https://img.shields.io/badge/throughput-245k%20rec%2Fs-2563EB)](#benchmarks)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Live](https://img.shields.io/badge/live-sanjit--ml.com%2Fmini--kafka-6c8cff)](https://sanjit-ml.com/mini-kafka/)
 
 </div>
 
