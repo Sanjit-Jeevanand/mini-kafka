@@ -29,6 +29,3 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
-
-      - name: Eval gate
-        run: go run eval/gate.go

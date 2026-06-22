@@ -19,6 +19,18 @@ func newTestLog(t *testing.T) *ilog.Log {
 	return l
 }
 
+func waitFor(t *testing.T, cond func() bool, timeout time.Duration, msg string) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal(msg)
+}
+
 func TestAcksAll(t *testing.T) {
 	leaderLog := newTestLog(t)
 	f1Log := newTestLog(t)
@@ -166,9 +178,6 @@ func TestHighWatermark(t *testing.T) {
 
 	go NewFetcher(r2, leaderLog, f2Log, isr, hw, 100, time.Millisecond).Run(ctx)
 
-	time.Sleep(50 * time.Millisecond)
-
-	if hw.Get() != n {
-		t.Fatalf("HW should be %d after both fetchers caught up, got %d", n, hw.Get())
-	}
+	waitFor(t, func() bool { return hw.Get() == n }, 2*time.Second,
+		fmt.Sprintf("HW should reach %d after both fetchers caught up, got %d", n, hw.Get()))
 }
