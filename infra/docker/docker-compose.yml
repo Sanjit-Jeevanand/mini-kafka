@@ -1,0 +1,27 @@
+services:
+  broker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    volumes:
+      - broker-data:/data
+    command:
+      - -addr=:9092
+      - -dir=/data
+      - -topic=default
+      - -partitions=4
+      - -max-conns=1024
+
+  web:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ../../web:/usr/share/nginx/html:ro
+
+volumes:
+  broker-data:
