@@ -21,7 +21,7 @@ func NewEpochStore(dir string) (*EpochStore, error) {
 	}
 	e := &EpochStore{log: l}
 	if err := e.replay(); err != nil {
-		l.Close()
+		_ = l.Close()
 		return nil, err
 	}
 	return e, nil

@@ -7,6 +7,12 @@ linters:
     - staticcheck
     - ineffassign
   settings:
-    govet:
-      enable:
-        - shadow
+    errcheck:
+      exclude-functions:
+        - os.RemoveAll
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - govet

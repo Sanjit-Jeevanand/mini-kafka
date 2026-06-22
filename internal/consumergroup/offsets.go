@@ -31,7 +31,7 @@ func NewOffsetStore(dir string) (*OffsetStore, error) {
 		offsets: make(map[offsetKey]uint64),
 	}
 	if err := s.replay(); err != nil {
-		l.Close()
+		_ = l.Close()
 		return nil, err
 	}
 	return s, nil

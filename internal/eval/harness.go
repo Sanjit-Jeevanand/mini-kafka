@@ -129,7 +129,7 @@ func runPerRecord(payload []byte, cfg Config) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Duration)
 	defer cancel()
@@ -165,7 +165,7 @@ func runGroupCommit(payload []byte, cfg Config) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	gc := ilog.NewGroupCommitter(l, ilog.GroupCommitConfig{
 		BufSize:      cfg.BufSize,

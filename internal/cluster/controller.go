@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 )
@@ -68,7 +69,9 @@ func (c *Controller) checkPartitions(ctx context.Context) {
 	candidates := c.sortedBrokerIDs()
 	for p := 0; p < c.numPartitions; p++ {
 		if NeedsElection(p, c.membership, c.heartbeatTimeout) {
-			Elect(ctx, p, candidates, c.membership, c.epochs, c.heartbeatTimeout)
+			if _, _, err := Elect(ctx, p, candidates, c.membership, c.epochs, c.heartbeatTimeout); err != nil {
+				log.Printf("cluster: election failed for partition %d: %v", p, err)
+			}
 		}
 	}
 }

@@ -111,10 +111,7 @@ func (h *Handler) handleFetch(ctx context.Context, payload []byte) (uint16, []by
 	var bytesRead uint32
 	offset := req.Offset
 
-	for {
-		if req.MaxBytes > 0 && bytesRead >= req.MaxBytes {
-			break
-		}
+	for req.MaxBytes == 0 || bytesRead < req.MaxBytes {
 		rec, err := h.topic.Read(ctx, int(req.Partition), offset)
 		if err != nil {
 			break // no more records at this offset

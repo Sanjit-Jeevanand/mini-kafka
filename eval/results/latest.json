@@ -1,7 +1,7 @@
 {
-  "e2e_p99_us": 30511,
-  "e2e_produce_rec_per_s": 66.41352597794123,
-  "raw_append_rec_per_s": 96.04419440566373,
+  "e2e_p99_us": 13963,
+  "e2e_produce_rec_per_s": 122.58702759556579,
+  "raw_append_rec_per_s": 116.03563667134178,
   "sentinel": true,
-  "timestamp": "2026-06-22T16:56:27Z"
+  "timestamp": "2026-06-22T17:01:18Z"
 }

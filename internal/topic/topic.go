@@ -46,7 +46,7 @@ func Open(name string, opts Options) (*Topic, error) {
 	for i := 0; i < opts.NumPartitions; i++ {
 		p, err := openPartition(topicDir, i, opts.MaxBytes)
 		if err != nil {
-			t.Close()
+			_ = t.Close()
 			return nil, err
 		}
 		t.partitions[i] = p

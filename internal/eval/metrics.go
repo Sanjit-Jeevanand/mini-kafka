@@ -100,7 +100,7 @@ func MeasurePerf(cfg Config) (PerfMetrics, error) {
 	if err != nil {
 		return PerfMetrics{}, err
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	gc := ilog.NewGroupCommitter(l, ilog.GroupCommitConfig{
 		BufSize:      cfg.BufSize,

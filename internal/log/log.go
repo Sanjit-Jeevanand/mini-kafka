@@ -46,7 +46,7 @@ func New(opts Options) (*Log, error) {
 		var seg *Segment
 		seg, err = openSegment(opts.Dir, base, opts.MaxBytes)
 		if err != nil {
-			l.Close()
+			_ = l.Close()
 			return nil, err
 		}
 		l.segments = append(l.segments, seg)
@@ -55,7 +55,7 @@ func New(opts Options) (*Log, error) {
 	active := l.segments[len(l.segments)-1]
 	nextOffset, err := Recover(active.file, active.index, active.baseOffset)
 	if err != nil {
-		l.Close()
+		_ = l.Close()
 		return nil, err
 	}
 	active.nextOffset = nextOffset

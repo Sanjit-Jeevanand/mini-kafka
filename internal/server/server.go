@@ -51,7 +51,7 @@ func (s *Server) ListenAndServe(ctx context.Context, ready chan<- struct{}) erro
 
 	go func() {
 		<-ctx.Done()
-		ln.Close()
+		_ = ln.Close()
 	}()
 
 	for {
@@ -70,7 +70,7 @@ func (s *Server) ListenAndServe(ctx context.Context, ready chan<- struct{}) erro
 		s.wg.Add(1)
 		go func(c net.Conn) {
 			defer func() {
-				c.Close()
+				_ = c.Close()
 				<-s.sem
 				s.wg.Done()
 			}()

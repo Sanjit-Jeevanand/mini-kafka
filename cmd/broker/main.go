@@ -27,7 +27,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("open topic: %v", err)
 	}
-	defer t.Close()
+	defer func() { _ = t.Close() }()
 
 	h := server.NewHandler(t, *addr)
 	srv := server.NewServer(*addr, h, *maxConns)
