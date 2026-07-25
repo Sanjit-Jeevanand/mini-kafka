@@ -1,10 +1,19 @@
 sanjit-ml.com, www.sanjit-ml.com {
-	root * /srv
-	file_server
 	encode gzip
 
 	@www host www.sanjit-ml.com
 	redir @www https://sanjit-ml.com{uri} permanent
+
+	redir /matching-engine /matching-engine/ 308
+
+	handle_path /matching-engine/* {
+		reverse_proxy host.docker.internal:8091
+	}
+
+	handle {
+		root * /srv
+		file_server
+	}
 }
 
 rag.sanjit-ml.com {

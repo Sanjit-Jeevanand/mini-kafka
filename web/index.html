@@ -23,6 +23,7 @@
     --go:        #38bdf8;
     --py:        #fbbf24;
     --agent:     #a78bfa;
+    --jvm:       #ff7b72;
     --accent:    #6c8cff;
     --green:     #3ecf8e;
     --r:         14px;
@@ -337,7 +338,7 @@
 <header class="hero container">
   <div class="hero-status"><span class="pulse"></span>Open to new-grad SDE / MLE roles</div>
   <h1>Backend systems and<br><span class="grad">ML infrastructure</span>, built from scratch.</h1>
-  <p>I build distributed systems and ML pipelines from the ground up — not with frameworks that hide the mechanism, but with <strong>hand-built storage engines</strong>, <strong>replication protocols</strong>, and <strong>retrieval algorithms</strong> I can defend line by line.</p>
+  <p>I build distributed systems and ML pipelines from the ground up — not with frameworks that hide the mechanism, but with <strong>hand-built storage engines</strong>, <strong>lock-free matching pipelines</strong>, <strong>replication protocols</strong>, and <strong>retrieval algorithms</strong> I can defend line by line.</p>
   <div class="hero-links">
     <a href="#projects" class="btn btn-primary">
       Explore the work
@@ -351,16 +352,16 @@
 
   <div class="stats">
     <div class="stat">
+      <div class="stat-value">14.5<span class="u">M</span></div>
+      <div class="stat-label">orders/sec · matching-engine</div>
+    </div>
+    <div class="stat">
       <div class="stat-value">244<span class="u">k</span></div>
       <div class="stat-label">records/sec · mini-kafka</div>
     </div>
     <div class="stat">
       <div class="stat-value">2000<span class="u">+</span></div>
       <div class="stat-label">QPS · RAG retrieval</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value">97<span class="u">%</span></div>
-      <div class="stat-label">recall@10 · 6M vectors</div>
     </div>
     <div class="stat">
       <div class="stat-value"><span class="u">&lt;$</span>0.10</div>
@@ -379,6 +380,36 @@
   </div>
 
   <div class="projects">
+
+    <!-- matching-engine -->
+    <article class="card" style="--c: var(--jvm);">
+      <div class="card-top">
+        <div class="card-head">
+          <span class="tag">Java 21 · low-latency systems</span>
+          <h3 class="card-name">matching-engine</h3>
+        </div>
+        <div class="card-actions">
+          <a href="/matching-engine/" class="act act-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Live
+          </a>
+          <a href="https://github.com/Sanjit-Jeevanand/matching-engine" target="_blank" class="act">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+            Source
+          </a>
+        </div>
+      </div>
+      <p class="card-desc">A price-time-priority limit order book on a lock-free single-writer pipeline: LMAX Disruptor ring-buffer intake, cache-line-padded sequences, object pooling, and off-heap serialization via Panama <code>MemorySegment</code>. Every headline number is measured under a <em>realistic</em> mixed order flow (multi-level sweeps, partial fills, cancellations), not a synthetic always-crossing best case, with the cheap-workload figures reported separately rather than quietly headlined.</p>
+      <div class="metrics">
+        <span class="metric"><b>14.5M</b> orders/sec</span>
+        <span class="metric"><b>326ns</b> avg latency</span>
+        <span class="metric">P99 <b>770ns</b></span>
+        <span class="metric"><b>124</b> tests · 4k property runs</span>
+      </div>
+      <div class="stack">
+        <span class="chip">Java 21</span><span class="chip">LMAX Disruptor</span><span class="chip">lock-free ring buffer</span><span class="chip">object pooling</span><span class="chip">cache-line padding</span><span class="chip">Panama MemorySegment</span><span class="chip">JMH</span><span class="chip">HdrHistogram</span><span class="chip">jqwik</span>
+      </div>
+    </article>
 
     <!-- mini-kafka -->
     <article class="card" style="--c: var(--go);">
@@ -488,6 +519,7 @@
       </h3>
       <ul class="skills">
         <li><b>Distributed storage engines</b> — segmented logs, WAL, CRC checksums, crash recovery</li>
+        <li><b>Lock-free concurrency</b> — single-writer ring buffers, cache-line padding, false sharing</li>
         <li><b>Replication protocols</b> — ISR, high-watermark, epoch fencing, log truncation</li>
         <li><b>Leader election</b> — term-based, controller architecture, failover &lt;5s</li>
         <li><b>ANN indexing</b> — HNSW, IVF-PQ, benchmarked at 6M vectors</li>
@@ -502,6 +534,7 @@
       </h3>
       <ul class="skills">
         <li><b>Go</b> — goroutines, channels, race-clean, golangci-lint, pprof</li>
+        <li><b>Java 21</b> — JMH, HdrHistogram, JVM internals, off-heap memory</li>
         <li><b>Python</b> — FastAPI, Pydantic, mypy strict, pytest / hypothesis</li>
         <li><b>Observability</b> — Prometheus, Grafana, OpenTelemetry, SLOs</li>
         <li><b>CI/CD</b> — GitHub Actions, Docker multi-stage, Hetzner deploys</li>
@@ -541,7 +574,7 @@
 </main>
 
 <footer>
-  <div class="footer-text">// built with Go, Python &amp; too much coffee — Sanjit Jeevanand, 2026</div>
+  <div class="footer-text">// built with Go, Java, Python &amp; too much coffee — Sanjit Jeevanand, 2026</div>
 </footer>
 
 </div>
