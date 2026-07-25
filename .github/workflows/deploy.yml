@@ -30,9 +30,9 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             docker compose -f infra/docker/docker-compose.yml up -d --build
-            # web bind-mounts Caddyfile as a single file; `git reset --hard` replaces it via
-            # unlink+recreate (a new inode), which a plain `up -d` never notices since the
-            # container definition itself didn't change. Force-recreate so it always picks up
+            # web bind-mounts Caddyfile as a single file; git reset --hard replaces it via
+            # unlink+recreate (a new inode), which a plain up -d never notices since the
+            # container definition itself stays the same. Force-recreate so it always picks up
             # the current file instead of silently keeping whatever inode it started with.
             docker compose -f infra/docker/docker-compose.yml up -d --force-recreate --no-deps web
             docker image prune -f
