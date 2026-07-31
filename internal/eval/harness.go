@@ -22,9 +22,9 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		Workers:      500,
+		Workers:      2000,
 		Duration:     3 * time.Second,
-		BufSize:      2000,
+		BufSize:      8000,
 		MaxBatchSize: 10_000,
 		MaxBatchWait: time.Millisecond,
 	}

@@ -10,8 +10,10 @@ import (
 )
 
 func main() {
-	workers := flag.Int("workers", 500, "concurrent producer goroutines")
+	workers := flag.Int("workers", 2000, "concurrent producer goroutines")
 	dur := flag.Duration("duration", 3*time.Second, "measurement window per mode")
+	faultSeeds := flag.Int("fault-seeds", 100, "number of seeded fault-injection scenarios to run")
+	failoverTrials := flag.Int("failover-trials", 10, "number of leader-failover trials to time")
 	flag.Parse()
 
 	cfg := eval.Config{
@@ -30,26 +32,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ReplicationMetrics are populated by cluster failover tests.
-	// Run: go test -v -run TestElectionOnLeaderDeath ./internal/cluster/
-	// and record the failover durations into this struct.
-	repl := eval.ReplicationMetrics{
-		AcknowledgedLostRecords: 0,
-		FailoverDurations: []time.Duration{
-			1200 * time.Millisecond,
-			1800 * time.Millisecond,
-			2400 * time.Millisecond,
-		},
+	// ReplicationMetrics come from driving the real cluster.Controller loop
+	// (internal/eval/failover.go): each trial kills the partition leader and
+	// times how long the controller takes to detect it, bump the epoch, and
+	// install a successor. Trials sweep the death moment across one poll
+	// interval so min/max bracket the true best and worst case.
+	fmt.Printf("running %d failover trials...\n", *failoverTrials)
+	repl, err := eval.MeasureFailover(*failoverTrials)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failover measurement failed: %v\n", err)
+		os.Exit(1)
 	}
 
-	// FaultMetrics are populated by the sim step loop.
-	// Run: go test -v -run TestSimulator ./internal/sim/
-	// ScenariosRun = total Step() calls across all seeds.
-	// ViolationsFound = invariant errors surfaced during those runs.
-	fault := eval.FaultMetrics{
-		ScenariosRun:    10_000,
-		UniqueSeeds:     100,
-		ViolationsFound: 7,
+	// FaultMetrics come from real seeded scenarios against the ISR /
+	// HighWatermark / Fetcher replication primitives (internal/eval/fault.go),
+	// not a placeholder: each scenario randomly crashes and recovers a
+	// follower mid-stream and checks that no record acknowledged via
+	// isr.WaitAll is ever missing from a replica that was in the ISR at
+	// acknowledgment time, plus high-watermark monotonicity.
+	fmt.Printf("running %d fault-injection scenarios...\n", *faultSeeds)
+	fault, err := eval.MeasureFaultInjection(*faultSeeds)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fault injection sweep failed: %v\n", err)
+		os.Exit(1)
 	}
 
 	summary := eval.CVSummary{

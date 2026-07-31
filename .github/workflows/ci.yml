@@ -23,7 +23,7 @@ jobs:
           version: latest
 
       - name: Test
-        run: go test -race ./...
+        run: go test -race -p 1 ./...
 
       - name: Security audit
         run: |
